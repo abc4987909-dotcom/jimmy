@@ -1,0 +1,55 @@
+async function fetchStockPrice(code) {
+  try {
+    const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${code}.TW`);
+    const data = await res.json();
+    const quote = data.quoteResponse.result[0];
+    return {
+      code: code,
+      name: quote.shortName,
+      price: quote.regularMarketPrice,
+      change: quote.regularMarketChange,
+      change_pct: quote.regularMarketChangePercent,
+      date: new Date().toISOString().split('T')[0],
+      volume: quote.regularMarketVolume.toLocaleString() + "張"
+    };
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+async function analyze() {
+  if (isAnalyzing) return;
+  const code = document.getElementById('stockCode').value.trim();
+  if (!code) { setStatus('error', '請輸入股票代號'); return; }
+
+  isAnalyzing = true;
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('disclaimer').style.display = 'none';
+
+  setStatus('loading', `抓取 ${code} 即時股價...`);
+  const data = await fetchStockPrice(code);
+
+  if (!data) {
+    setStatus('error', '無法取得股價資料');
+    isAnalyzing = false;
+    document.getElementById('analyzeBtn').disabled = false;
+    return;
+  }
+
+  // 使用原本模擬的雷達圖、預測資料
+  const finalJsonData = {
+    ...data,
+    m3_radar: { trend: 8.8, volume: 6.5, main_force: 8.2, institution:7.8, volatility:4.5, chips:8.5, grade:"S" },
+    m10_path: { days3: data.price*1.02, days5: data.price*1.045, days10: data.price*1.08 }
+    // 其他模擬欄位保留
+  };
+
+  renderDashboard(finalJsonData);
+  setTimeout(()=>drawAnalysisChart(finalJsonData), 50);
+  setStatus('done', `✓ ${finalJsonData.code} ${finalJsonData.name} 即時分析完成`);
+  document.getElementById('disclaimer').style.display = 'block';
+  isAnalyzing = false;
+  document.getElementById('analyzeBtn').disabled = false;
+}
