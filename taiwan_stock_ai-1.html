@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股 AI 全方位分析儀表板 (即時版)</title>
+<style>
+/* -------- 基本樣式 -------- */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght=400;500;700&family=JetBrains+Mono:wght=400;600&display=swap');
+:root { --bg:#0a0e1a; --bg2:#111827; --bg3:#1a2235; --border:#1e2d45; --border2:#243350; --text:#e8edf5; --text2:#8a9bb5; --text3:#4a5a72; --red:#f04438; --green:#12b76a; --amber:#f79009; --blue:#2e90fa; --accent:#f79009; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px;}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.header-brand{display:flex;align-items:center;gap:10px;}
+.brand-icon{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#f79009,#ef4444);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;font-family:'JetBrains Mono',monospace;}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:0.02em;}
+.brand-sub{font-size:11px;color:var(--text2);}
+.input-section{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.stock-input-wrap{display:flex;gap:8px;align-items:center;flex:1;min-width:240px;}
+.stock-input{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:10px 14px;width:130px;outline:none;letter-spacing:0.08em;}
+.stock-input:focus{border-color:var(--accent);}
+.stock-input::placeholder{color:var(--text3);font-size:14px;}
+.analyze-btn{background:linear-gradient(135deg,#f79009,#ef4444);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;padding:10px 22px;cursor:pointer;letter-spacing:0.05em;transition:opacity 0.2s,transform 0.1s;white-space:nowrap;}
+.analyze-btn:hover{opacity:0.9;transform:translateY(-1px);}
+.analyze-btn:active{transform:translateY(0);}
+.analyze-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.status-bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:14px;padding:8px 12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);}
+.status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.status-dot.idle{background:var(--text3);}
+.status-dot.loading{background:var(--amber);animation:pulse 1s infinite;}
+.status-dot.done{background:var(--green);}
+.status-dot.error{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+#dashboard{display:none;}
+.disclaimer{font-size:10px;color:var(--text3);text-align:center;margin-top:12px;line-height:1.5;display:none;}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-brand">
+    <div class="brand-icon">AI</div>
+    <div>
+      <div class="brand-name">台股全方位 AI 分析儀表板</div>
+      <div class="brand-sub">即時股價版</div>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--text2);font-family:'JetBrains Mono',monospace;">v3.0 即時版</div>
+</div>
+
+<div class="input-section">
+  <div class="stock-input-wrap">
+    <input class="stock-input" id="stockCode" type="text" placeholder="股票代號" maxlength="6" value="2330" />
+    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">▶ AI 分析</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot idle" id="statusDot"></div>
+  <span id="statusText">輸入股票代號，按下 AI 分析開始</span>
+</div>
+
+<div id="dashboard"></div>
+<div class="disclaimer">⚠ 本工具為 AI 模擬分析，僅供參考。</div>
+
+<script>
+let isAnalyzing = false;
+
+function setStatus(type,text){
+  const dot = document.getElementById('statusDot');
+  dot.className='status-dot '+type;
+  document.getElementById('statusText').textContent=text;
+}
+
+// 抓 Yahoo Finance 即時股價
+async function fetchStockPrice(code){
+  try{
+    const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${code}.TW`);
+    const data = await res.json();
+    const quote = data.quoteResponse.result[0];
+    return {
+      code:code,
+      name:quote.shortName,
+      price:quote.regularMarketPrice,
+      change:quote.regularMarketChange,
+      change_pct:quote.regularMarketChangePercent,
+      date:new Date().toISOString().split('T')[0],
+      volume:quote.regularMarketVolume.toLocaleString()+'張'
+    };
+  }catch(err){console.error(err);return null;}
+}
+
+function renderDashboard(d){
+  const db=document.getElementById('dashboard');
+  db.style.display='block';
+  const changeColor=d.change>=0?'var(--red)':'var(--green)';
+  const changeSign=d.change>=0?'+':'';
+  db.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:16px;">
+    <div style="display:flex;justify-content:space-between;">
+      <div>${d.code} ${d.name}</div>
+      <div style="color:${changeColor};">${d.price} (${changeSign}${d.change_pct.toFixed(2)}%)</div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:var(--text2);">成交量: ${d.volume} · 日期: ${d.date}</div>
+  </div>`;
+}
+
+async function analyze(){
+  if(isAnalyzing) return;
+  const code=document.getElementById('stockCode').value.trim();
+  if(!code){setStatus('error','請輸入股票代號');return;}
+  isAnalyzing=true;
+  document.getElementById('analyzeBtn').disabled=true;
+  document.getElementById('dashboard').style.display='none';
+  setStatus('loading',`抓取 ${code} 即時股價...`);
+  const data=await fetchStockPrice(code);
+  if(!data){setStatus('error','無法取得股價資料');isAnalyzing=false;document.getElementById('analyzeBtn').disabled=false;return;}
+  renderDashboard(data);
+  setStatus('done',`✓ ${data.code} ${data.name} 即時分析完成`);
+  isAnalyzing=false;
+  document.getElementById('analyzeBtn').disabled=false;
+}
+</script>
+</body>
+</html>
