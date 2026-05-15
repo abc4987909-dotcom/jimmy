@@ -7,7 +7,11 @@
 <style>
 /* -------- 基本樣式 -------- */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght=400;500;700&family=JetBrains+Mono:wght=400;600&display=swap');
-:root { --bg:#0a0e1a; --bg2:#111827; --bg3:#1a2235; --border:#1e2d45; --border2:#243350; --text:#e8edf5; --text2:#8a9bb5; --text3:#4a5a72; --red:#f04438; --green:#12b76a; --amber:#f79009; --blue:#2e90fa; --accent:#f79009; }
+:root {
+  --bg:#0a0e1a; --bg2:#111827; --bg3:#1a2235; --border:#1e2d45; --border2:#243350; 
+  --text:#e8edf5; --text2:#8a9bb5; --text3:#4a5a72; --red:#f04438; --green:#12b76a; 
+  --amber:#f79009; --blue:#2e90fa; --accent:#f79009;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px;}
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
@@ -36,12 +40,13 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text
 </style>
 </head>
 <body>
+
 <div class="header">
   <div class="header-brand">
     <div class="brand-icon">AI</div>
     <div>
       <div class="brand-name">台股全方位 AI 分析儀表板</div>
-      <div class="brand-sub">即時股價版</div>
+      <div class="brand-sub">即時股價 + 模擬走勢</div>
     </div>
   </div>
   <div style="font-size:11px;color:var(--text2);font-family:'JetBrains Mono',monospace;">v3.0 即時版</div>
@@ -78,15 +83,26 @@ async function fetchStockPrice(code){
     const data = await res.json();
     const quote = data.quoteResponse.result[0];
     return {
-      code:code,
-      name:quote.shortName,
-      price:quote.regularMarketPrice,
-      change:quote.regularMarketChange,
-      change_pct:quote.regularMarketChangePercent,
-      date:new Date().toISOString().split('T')[0],
-      volume:quote.regularMarketVolume.toLocaleString()+'張'
+      code: code,
+      name: quote.shortName,
+      price: quote.regularMarketPrice,
+      change: quote.regularMarketChange,
+      change_pct: quote.regularMarketChangePercent,
+      date: new Date().toISOString().split('T')[0],
+      volume: quote.regularMarketVolume.toLocaleString() + "張"
     };
-  }catch(err){console.error(err);return null;}
+  }catch(err){
+    console.error(err);
+    return null;
+  }
+}
+
+// 模擬後續走勢
+function generateSimData(price){
+  return {
+    m3_radar: { trend:8.8, volume:6.5, main_force:8.2, institution:7.8, volatility:4.5, chips:8.5, grade:"S" },
+    m10_path: { days3: price*1.02, days5: price*1.045, days10: price*1.08 }
+  };
 }
 
 function renderDashboard(d){
@@ -100,24 +116,39 @@ function renderDashboard(d){
       <div style="color:${changeColor};">${d.price} (${changeSign}${d.change_pct.toFixed(2)}%)</div>
     </div>
     <div style="margin-top:8px;font-size:12px;color:var(--text2);">成交量: ${d.volume} · 日期: ${d.date}</div>
+    <div style="margin-top:8px;font-size:12px;color:var(--text2);">
+      模擬 3 日: ${d.m10_path.days3.toFixed(2)}, 5 日: ${d.m10_path.days5.toFixed(2)}, 10 日: ${d.m10_path.days10.toFixed(2)}
+    </div>
   </div>`;
 }
 
 async function analyze(){
   if(isAnalyzing) return;
-  const code=document.getElementById('stockCode').value.trim();
-  if(!code){setStatus('error','請輸入股票代號');return;}
-  isAnalyzing=true;
-  document.getElementById('analyzeBtn').disabled=true;
-  document.getElementById('dashboard').style.display='none';
-  setStatus('loading',`抓取 ${code} 即時股價...`);
-  const data=await fetchStockPrice(code);
-  if(!data){setStatus('error','無法取得股價資料');isAnalyzing=false;document.getElementById('analyzeBtn').disabled=false;return;}
-  renderDashboard(data);
-  setStatus('done',`✓ ${data.code} ${data.name} 即時分析完成`);
+  const code = document.getElementById('stockCode').value.trim();
+  if(!code){ setStatus('error','請輸入股票代號'); return; }
+
+  isAnalyzing = true;
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('dashboard').style.display = 'none';
+  setStatus('loading', `抓取 ${code} 即時股價...`);
+
+  const realData = await fetchStockPrice(code);
+  if(!realData){
+    setStatus('error','無法取得股價資料');
+    isAnalyzing=false;
+    document.getElementById('analyzeBtn').disabled=false;
+    return;
+  }
+
+  const simData = generateSimData(realData.price);
+  const finalData = {...realData, ...simData};
+
+  renderDashboard(finalData);
+  setStatus('done', `✓ ${finalData.code} ${finalData.name} 即時分析完成`);
   isAnalyzing=false;
   document.getElementById('analyzeBtn').disabled=false;
 }
 </script>
+
 </body>
 </html>
